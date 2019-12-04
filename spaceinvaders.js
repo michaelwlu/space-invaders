@@ -1,139 +1,179 @@
+// Declare canvas
 let canvas
 let canvasContext
 
 // Game Config
 const FRAMES_PER_SECOND = 30
-const LEFT_MARGIN = 70
-const RIGHT_MARGIN = 70
-const TOP_MARGIN = 50
+const FLEET_SIDE_MARGIN = 80
+const FLEET_TOP_MARGIN = 70
+const PLAYER_SIDE_MARGIN = 10
+const PLAYER_BOT_MARGIN = 50
 const INSTRUCTIONS = 'USE LEFT / RIGHT ARROWS TO MOVE'
 
 // Enemy Config
-let enemyHeight = 20
-let enemyWidth = 20
-let enemyXSpeed = 10
-let enemyYSpeed = 0
+let enemyHeight = 15
+let enemyWidth = 30
+let enemyVelocityX = 10
+let enemyVelocityY = 0
 
 // Enemy Fleet Config
-let enemyRows = 6
-let enemyColumns = 6
-let enemyFleetWidth = 0.6 // ratio to canvas
-let enemyFleetHeight = 0.5 // ratio to canvas
+let fleetRows = 6
+let fleetColumns = 6
+let fleetWidthRatio = 0.6 // ratio to canvas
+let fleetHeightRatio = 0.5 // ratio to canvas
+let fleetMovementRate = 1000
 
 // Player Config
 let playerHeight = 20
-let playerWidth = 20
-let playerMovement = 10
+let playerWidth = 30
+let playerVelocityX = 10 // horizontal movement per keydown
 
-// Positions/Timer
-let time = 0
-let enemyFleetLeftX = LEFT_MARGIN + 0
-let enemyFleetTopY = TOP_MARGIN + 0
-let enemyMoveTimer = 0
-let enemyFleet
-let playerX = 400
-let playerY = 550
-let showInstructions = true
+// Positions & Time
+let fleetCenterX
+let fleetCenterY
+let fleetMovementTimer = 0
+let enemyFleet = {}
+let playerCenterX
+let playerCenterY
+let gameStart = false
 
 // On Load
 window.onload = function() {
   canvas = document.getElementById('gameCanvas')
   canvasContext = canvas.getContext('2d')
 
-  enemyFleet = createEnemies()
+  positionFleet()
+  positionPlayer()
+
   setInterval(runAll, 1000/FRAMES_PER_SECOND)
 
   document.addEventListener('keydown', movePlayer)
 }
 
-function movePlayer(e) {
-  if (showInstructions === true) showInstructions = false
-
-  switch (e.key) {
-    case 'ArrowLeft':
-      if (playerX > LEFT_MARGIN) playerX -= playerMovement
-      break
-    case 'ArrowRight':
-      if (playerX < (canvas.width - RIGHT_MARGIN)) playerX += playerMovement
-      break
-  }
-}
-
-
 // Umbrella Run All
 function runAll() {
-  enemyMoveTimer += 1000/FRAMES_PER_SECOND
+  fleetMovementTimer += 1000/FRAMES_PER_SECOND
   moveEverything()
   drawEverything()
 }
 
-// Initialize Enemy Fleet
-function createEnemies() {
-  let enemies = {}
+// Initial Enemy Fleet Position
+function positionFleet() {
+  
+  fleetWidth = canvas.width * fleetWidthRatio
+  fleetHeight = canvas.height * fleetHeightRatio
 
-  for (let i = 0; i < enemyRows; ++i) {
-    for (let j = 0; j < enemyColumns; ++j) {
-      let position = [i * (enemyFleetWidth * canvas.width)/(enemyColumns - 1) - enemyWidth/2, j * (enemyFleetHeight * canvas.height)/(enemyRows - 1) - enemyHeight/2]
+  // Fleet container position
+  fleetCenterX = canvas.width/2
+  fleetCenterY = FLEET_TOP_MARGIN + (fleetHeightRatio*canvas.height)/2
 
-      enemies[i*enemyRows + j] = position
+  // Build fleet array based on given rows/columns
+  for (let i = 0; i < fleetRows; ++i) {
+    for (let j = 0; j < fleetColumns; ++j) {
+
+      // Spaces fleet out based on given fleet width/height
+      let position = [
+        i * (fleetWidth)/(fleetColumns-1) + (canvas.width/2 - fleetWidth/2) - enemyWidth/2,
+        j * (fleetHeight)/(fleetRows-1) + FLEET_TOP_MARGIN - enemyHeight/2
+      ]
+
+      // Assign enemy designation/positions as key/value pairs
+      enemyFleet[i*fleetRows + j] = position
     }
   }
+}
 
-  return enemies
+// Initial Player Position
+function positionPlayer() {
+  playerCenterX = canvas.width/2
+  playerCenterY = canvas.height - PLAYER_BOT_MARGIN
+}
+
+// Move Player
+function movePlayer(e) {
+
+  if (gameStart === false && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) gameStart = true // remove instructions once correct keys are pressed
+
+  // Move player based on keydown, bound by side margins
+  switch (e.key) {
+
+    case 'ArrowLeft':
+      if (playerCenterX > PLAYER_SIDE_MARGIN) playerCenterX -= playerVelocityX
+      break
+
+    case 'ArrowRight':
+      if (playerCenterX < canvas.width - PLAYER_SIDE_MARGIN) playerCenterX += playerVelocityX
+      break
+  }
 }
 
 // Umbrella Move
 function moveEverything() {
-  if (enemyMoveTimer > 1000) {
+  if (gameStart) {
     moveFleet()
-    enemyMoveTimer = 0
   }
 }
 
 // Move Enemy Fleet
 function moveFleet() {
-  for (let key in enemyFleet) {
-    enemyFleet[key][0] += enemyXSpeed
-  }
-
-  enemyFleetLeftX += enemyXSpeed
   
-  if (enemyFleetLeftX < LEFT_MARGIN || enemyFleetLeftX + (enemyFleetWidth * canvas.width) > canvas.width - RIGHT_MARGIN) {
-    enemyXSpeed *= -1
-    enemyFleetTopY += enemyYSpeed // for moving the fleet down
+  // Limits fleet movement rate
+  if (fleetMovementTimer > fleetMovementRate) {
+    
+    // Moves individual enemies
+    for (let key in enemyFleet) {
+      enemyFleet[key][0] += enemyVelocityX
+    }
+
+    // Moves fleet position
+    fleetCenterX += enemyVelocityX
+
+    // Changes fleet horizontal movement direction when at edge
+    if (fleetCenterX - fleetWidth/2 < FLEET_SIDE_MARGIN || fleetCenterX + fleetWidth/2 > canvas.width - FLEET_SIDE_MARGIN) {
+      enemyVelocityX *= -1
+      fleetCenterY += enemyVelocityY // moves the fleet down based on Y speed
+    }
+
+    // Reset fleet movement timer
+    fleetMovementTimer = 0
   }
 }
 
 // Umbrella Draw
 function drawEverything() {
-  colorRect(0, 0, canvas.width, canvas.height, 'black')
+  colorRect(0, 0, canvas.width, canvas.height, 'black') // black background
 
   drawFleet()
   drawPlayer()
 
-  if (showInstructions) displayInstructions()
+  if (!gameStart) displayInstructions() // displays instructions
 }
 
 // Draw Enemy Fleet
 function drawFleet() {
+
+  // Draws individual enemies
   for (let key in enemyFleet) {
-    let enemyPos = enemyFleet[key] 
-    colorRect(LEFT_MARGIN + enemyPos[0],
-      TOP_MARGIN + enemyPos[1], enemyWidth, enemyHeight, 'white')
+    let enemyPos = enemyFleet[key]
+
+    colorRect(enemyPos[0], enemyPos[1], enemyWidth, enemyHeight, 'white')
   }
 }
 
 // Draw Player
 function drawPlayer() {
-  colorRect(playerX - playerWidth/2, playerY - playerHeight/2, playerWidth, playerHeight, 'white')
+  colorRect(playerCenterX-playerWidth/6, playerCenterY-playerHeight/2, playerWidth/3, playerHeight/2, 'white')
+  colorRect(playerCenterX-playerWidth/2, playerCenterY, playerWidth, playerHeight/2, 'white')
 }
 
+// Display Instructions
 function displayInstructions() {
   canvasContext.font = '20px Arial'
-  canvasContext.fillText(INSTRUCTIONS, 220, 500)
+  canvasContext.textAlign = "center";
+  canvasContext.fillText(INSTRUCTIONS, canvas.width/2, 500)
 }
 
-// HTML Canvas Draw Functions
+// Draw Rectangle
 function colorRect(leftX, topY, width, height, drawColor) {
   canvasContext.fillStyle = drawColor
   canvasContext.fillRect(leftX, topY, width, height)
