@@ -1,41 +1,61 @@
-// Declare canvas
+/* Recurse Center Pair Programming Task:
+
+Write a game of Space Invaders that has computer-controller enemies that move left and right automatically and a human-controlled player that you can move left and right with the arrow keys.
+
+During your interview, you can add the ability to shoot bullets at the enemies and track your score.
+
+*/
+
+// HTML Canvas
 let canvas
 let canvasContext
 
 // Game Config
 const FRAMES_PER_SECOND = 30
 const FLEET_SIDE_MARGIN = 80
-const FLEET_TOP_MARGIN = 70
+const FLEET_TOP_MARGIN = 100
 const PLAYER_SIDE_MARGIN = 10
 const PLAYER_BOT_MARGIN = 50
 const INSTRUCTIONS = 'USE LEFT / RIGHT ARROWS TO MOVE'
+const GAME_OVER = 'GG EZ'
+const GAME_OVER_COLOR = 'white'
+const SCORE_INCREMENT = 100
+const SCORE_COLOR = '#99ff99'
 
-// Enemy Config
-let enemyHeight = 15
-let enemyWidth = 30
-let enemyVelocityX = 10
-let enemyVelocityY = 0
-
-// Enemy Fleet Config
-let fleetRows = 6
-let fleetColumns = 6
-let fleetWidthRatio = 0.6 // ratio to canvas
-let fleetHeightRatio = 0.5 // ratio to canvas
-let fleetMovementRate = 1000
+// Enemy/Fleet Config
+let enemyVelocityX = 15
+let enemyVelocityY = 0 // adjusts fleet moving down
+const ENEMY_HEIGHT = 15
+const ENEMY_WIDTH = 30
+const ENEMY_COLOR = '#ffcccc'
+const FLEET_ROWS = 6
+const FLEET_COLUMNS = 6
+const FLEET_WIDTH_RATIO = 0.6 // ratio to canvas
+const FLEET_HEIGHT_RATIO = 0.5 // ratio to canvas
+const FLEET_MOVE_RATE = 1000 // how often fleet moves (in milliseconds)
 
 // Player Config
-let playerHeight = 20
-let playerWidth = 30
-let playerVelocityX = 10 // horizontal movement per keydown
+const PLAYER_HEIGHT = 20
+const PLAYER_WIDTH = 30
+const PLAYER_COLOR = '#99ccff'
+const PLAYER_VELOCITY_X = 10 // horizontal movement per keydown
+const BULLET_VELOCITY_Y = 20
+const BULLET_HEIGHT = 10
+const BULLET_WIDTH = 3
 
-// Positions & Time
+// Positions & Timer
 let fleetCenterX
 let fleetCenterY
-let fleetMovementTimer = 0
 let enemyFleet = {}
 let playerCenterX
 let playerCenterY
+let fleetMovementTimer = 0
 let gameStart = false
+let gameOver = false
+let bulletCooldown = false
+let bulletX
+let bulletY
+let score = 0
 
 // On Load
 window.onload = function() {
@@ -48,6 +68,7 @@ window.onload = function() {
   setInterval(runAll, 1000/FRAMES_PER_SECOND)
 
   document.addEventListener('keydown', movePlayer)
+  document.addEventListener('keydown', fireBullet)
 }
 
 // Umbrella Run All
@@ -60,25 +81,25 @@ function runAll() {
 // Initial Enemy Fleet Position
 function positionFleet() {
   
-  fleetWidth = canvas.width * fleetWidthRatio
-  fleetHeight = canvas.height * fleetHeightRatio
+  fleetWidth = canvas.width * FLEET_WIDTH_RATIO
+  fleetHeight = canvas.height * FLEET_HEIGHT_RATIO
 
   // Fleet container position
   fleetCenterX = canvas.width/2
-  fleetCenterY = FLEET_TOP_MARGIN + (fleetHeightRatio*canvas.height)/2
+  fleetCenterY = FLEET_TOP_MARGIN + (FLEET_HEIGHT_RATIO*canvas.height)/2
 
   // Build fleet array based on given rows/columns
-  for (let i = 0; i < fleetRows; ++i) {
-    for (let j = 0; j < fleetColumns; ++j) {
+  for (let i = 0; i < FLEET_ROWS; ++i) {
+    for (let j = 0; j < FLEET_COLUMNS; ++j) {
 
       // Spaces fleet out based on given fleet width/height
       let position = [
-        i * (fleetWidth)/(fleetColumns-1) + (canvas.width/2 - fleetWidth/2) - enemyWidth/2,
-        j * (fleetHeight)/(fleetRows-1) + FLEET_TOP_MARGIN - enemyHeight/2
+        i * (fleetWidth)/(FLEET_COLUMNS-1) + (canvas.width/2 - fleetWidth/2),
+        j * (fleetHeight)/(FLEET_ROWS-1) + FLEET_TOP_MARGIN
       ]
 
       // Assign enemy designation/positions as key/value pairs
-      enemyFleet[i*fleetRows + j] = position
+      enemyFleet[i*FLEET_ROWS + j] = position
     }
   }
 }
@@ -87,6 +108,15 @@ function positionFleet() {
 function positionPlayer() {
   playerCenterX = canvas.width/2
   playerCenterY = canvas.height - PLAYER_BOT_MARGIN
+}
+
+// Fire Bullet
+function fireBullet(e) {
+  if (e.key === ' ' && bulletCooldown === false) {
+    bulletX = playerCenterX
+    bulletY = playerCenterY - PLAYER_HEIGHT/2
+    bulletCooldown = true
+  }
 }
 
 // Move Player
@@ -98,11 +128,11 @@ function movePlayer(e) {
   switch (e.key) {
 
     case 'ArrowLeft':
-      if (playerCenterX > PLAYER_SIDE_MARGIN) playerCenterX -= playerVelocityX
+      if (playerCenterX > PLAYER_SIDE_MARGIN) playerCenterX -= PLAYER_VELOCITY_X
       break
 
     case 'ArrowRight':
-      if (playerCenterX < canvas.width - PLAYER_SIDE_MARGIN) playerCenterX += playerVelocityX
+      if (playerCenterX < canvas.width - PLAYER_SIDE_MARGIN) playerCenterX += PLAYER_VELOCITY_X
       break
   }
 }
@@ -111,6 +141,42 @@ function movePlayer(e) {
 function moveEverything() {
   if (gameStart) {
     moveFleet()
+    moveBullet()
+    offScreenBullet()
+    collisionDetection()
+  }
+}
+
+// Move Bullet
+function moveBullet() {
+  if (bulletCooldown) {
+    bulletY -= BULLET_VELOCITY_Y
+  }
+}
+
+function resetBullet() {
+  bulletCooldown = false
+  bulletX = null
+  bulletY = null
+}
+
+// Check Bullet
+function offScreenBullet() {
+  if (bulletY < 0) {
+    resetBullet()
+  }
+}
+
+// Collision Detection
+function collisionDetection() {
+  for (let enemy in enemyFleet) {
+    if (bulletX < enemyFleet[enemy][0] + ENEMY_WIDTH/2 &&
+      bulletX > enemyFleet[enemy][0] - ENEMY_WIDTH/2 &&
+      bulletY - BULLET_HEIGHT/2 < enemyFleet[enemy][1] + ENEMY_HEIGHT/2) {
+        delete enemyFleet[enemy]
+        score += SCORE_INCREMENT
+        resetBullet()
+    }
   }
 }
 
@@ -118,7 +184,7 @@ function moveEverything() {
 function moveFleet() {
   
   // Limits fleet movement rate
-  if (fleetMovementTimer > fleetMovementRate) {
+  if (fleetMovementTimer > FLEET_MOVE_RATE) {
     
     // Moves individual enemies
     for (let key in enemyFleet) {
@@ -145,8 +211,12 @@ function drawEverything() {
 
   drawFleet()
   drawPlayer()
+  drawBullet()
 
-  if (!gameStart) displayInstructions() // displays instructions
+  if (!gameStart) displayInstructions()
+  else displayScore() // displays instructions
+
+  if (score === SCORE_INCREMENT * FLEET_ROWS * FLEET_COLUMNS) displayGameOver()
 }
 
 // Draw Enemy Fleet
@@ -156,21 +226,43 @@ function drawFleet() {
   for (let key in enemyFleet) {
     let enemyPos = enemyFleet[key]
 
-    colorRect(enemyPos[0], enemyPos[1], enemyWidth, enemyHeight, 'white')
+    colorRect(enemyPos[0] - ENEMY_WIDTH/2, enemyPos[1] - ENEMY_HEIGHT/2, ENEMY_WIDTH, ENEMY_HEIGHT, ENEMY_COLOR)
   }
 }
 
 // Draw Player
 function drawPlayer() {
-  colorRect(playerCenterX-playerWidth/6, playerCenterY-playerHeight/2, playerWidth/3, playerHeight/2, 'white')
-  colorRect(playerCenterX-playerWidth/2, playerCenterY, playerWidth, playerHeight/2, 'white')
+  colorRect(playerCenterX-PLAYER_WIDTH/6, playerCenterY-PLAYER_HEIGHT/2, PLAYER_WIDTH/3, PLAYER_HEIGHT/2, PLAYER_COLOR)
+  colorRect(playerCenterX-PLAYER_WIDTH/2, playerCenterY, PLAYER_WIDTH, PLAYER_HEIGHT/2, PLAYER_COLOR)
+}
+
+// Draw Bullet
+function drawBullet() {
+  if (bulletCooldown) {
+    colorRect(bulletX, bulletY, BULLET_WIDTH, BULLET_HEIGHT, 'white')
+  }
 }
 
 // Display Instructions
 function displayInstructions() {
   canvasContext.font = '20px Arial'
   canvasContext.textAlign = "center";
+  canvasContext.fillStyle = 'white'
   canvasContext.fillText(INSTRUCTIONS, canvas.width/2, 500)
+}
+
+function displayGameOver() {
+  canvasContext.font = '50px Arial'
+  canvasContext.textAlign = "center";
+  canvasContext.fillStyle = GAME_OVER_COLOR
+  canvasContext.fillText(GAME_OVER, canvas.width/2, canvas.height/2)
+}
+
+function displayScore() {
+  canvasContext.font = '20px Arial'
+  canvasContext.textAlign = "center";
+  canvasContext.fillStyle = SCORE_COLOR
+  canvasContext.fillText(score, canvas.width/2, 50)
 }
 
 // Draw Rectangle
