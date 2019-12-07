@@ -1,11 +1,3 @@
-/* Recurse Center Pair Programming Task:
-
-Write a game of Space Invaders that has computer-controller enemies that move left and right automatically and a human-controlled player that you can move left and right with the arrow keys.
-
-During your interview, you can add the ability to shoot bullets at the enemies and track your score.
-
-*/
-
 // HTML Canvas
 let canvas
 let canvasContext
@@ -17,7 +9,7 @@ const FLEET_TOP_MARGIN = 100
 const PLAYER_SIDE_MARGIN = 10
 const PLAYER_BOT_MARGIN = 50
 const INSTRUCTIONS = 'LEFT / RIGHT ARROWS TO MOVE  |  SPACE TO FIRE'
-const GAME_OVER = 'GG EZ'
+const GAME_OVER = 'YOU WIN'
 const GAME_OVER_COLOR = 'white'
 const SCORE_INCREMENT = 100
 const SCORE_COLOR = '#99ff99'
@@ -42,20 +34,21 @@ const PLAYER_VELOCITY_X = 10 // horizontal movement per keydown
 const BULLET_VELOCITY_Y = 20
 const BULLET_HEIGHT = 10
 const BULLET_WIDTH = 3
+const BULLET_RATE = 300 // fire rate in milliseconds
 
 // Positions & Timer
-let fleetCenterX
-let fleetCenterY
-let enemyFleet = {}
-let playerCenterX
-let playerCenterY
-let fleetMovementTimer = 0
+let score = 0
 let gameStart = false
 let gameOver = false
+let enemyFleet = {}
+let fleetCenterX
+let fleetCenterY
+let fleetMovementTimer = 0
+let playerCenterX
+let playerCenterY
+let bullets = []
+let bulletTimer = BULLET_RATE
 let bulletCooldown = false
-let bulletX
-let bulletY
-let score = 0
 
 // On Load
 window.onload = function() {
@@ -74,6 +67,7 @@ window.onload = function() {
 // Umbrella Run All
 function runAll() {
   fleetMovementTimer += 1000/FRAMES_PER_SECOND
+  reloadBullet()
   moveEverything()
   drawEverything()
 }
@@ -112,10 +106,29 @@ function positionPlayer() {
 
 // Fire Bullet
 function fireBullet(e) {
+
+  // Start game if space is pressed
+  if (gameStart === false && e.key === ' ') gameStart = true
+  
+  // Only fire when bullet is not on cooldown
   if (e.key === ' ' && bulletCooldown === false) {
-    bulletX = playerCenterX
-    bulletY = playerCenterY - PLAYER_HEIGHT/2
-    bulletCooldown = true
+    bullets.push([playerCenterX, playerCenterY - PLAYER_HEIGHT/2]) // add a bullet (coordinates) to array
+    bulletCooldown = true // set bullet on cooldown
+  }
+}
+
+// Reload Bullet
+function reloadBullet() {
+
+  // Begin bullet reload
+  if (bulletCooldown === true) {
+    bulletTimer -= 1000/FRAMES_PER_SECOND
+  }
+
+  // After reload time, set cooldown to false and reset bullet timer
+  if (bulletTimer < 0) {
+    bulletCooldown = false
+    bulletTimer = BULLET_RATE
   }
 }
 
@@ -142,40 +155,44 @@ function moveEverything() {
   if (gameStart) {
     moveFleet()
     moveBullet()
-    offScreenBullet()
-    collisionDetection()
+    bulletDetection()
   }
 }
 
 // Move Bullet
 function moveBullet() {
-  if (bulletCooldown) {
-    bulletY -= BULLET_VELOCITY_Y
+  for (let bullet of bullets) {
+    bullet[1] -= BULLET_VELOCITY_Y
   }
 }
 
-function resetBullet() {
-  bulletCooldown = false
-  bulletX = null
-  bulletY = null
-}
+// Detect bullet offscreen or collision
+function bulletDetection() {
 
-// Check Bullet
-function offScreenBullet() {
-  if (bulletY < 0) {
-    resetBullet()
-  }
-}
+  // Check each bullet in array
+  for (let i = 0; i < bullets.length; ++i) {
 
-// Collision Detection
-function collisionDetection() {
-  for (let enemy in enemyFleet) {
-    if (bulletX < enemyFleet[enemy][0] + ENEMY_WIDTH/2 &&
-      bulletX > enemyFleet[enemy][0] - ENEMY_WIDTH/2 &&
-      bulletY - BULLET_HEIGHT/2 < enemyFleet[enemy][1] + ENEMY_HEIGHT/2) {
-        delete enemyFleet[enemy]
-        score += SCORE_INCREMENT
-        resetBullet()
+    let selectedBullet = bullets[i]
+
+    // If offscreen, delete bullet and continue
+    if (selectedBullet[1] < 0) {
+      bullets.splice(i, 1)
+      continue // no need to check collision against enemy ships
+    }
+
+    // Check collision against each enemy ship
+    for (let enemy in enemyFleet) {
+
+      // Collision by matching coordinates
+      if (selectedBullet[0] < enemyFleet[enemy][0] + ENEMY_WIDTH/2 &&
+        selectedBullet[0] > enemyFleet[enemy][0] - ENEMY_WIDTH/2 &&
+        selectedBullet[1] - BULLET_HEIGHT/2 < enemyFleet[enemy][1] + ENEMY_HEIGHT/2) {
+
+          delete enemyFleet[enemy] // delete enemy ship from object
+          bullets.splice(i, 1) // delete bullet
+          score += SCORE_INCREMENT // increase score
+          break // no need to check the remaining enemy ships
+      }
     }
   }
 }
@@ -213,10 +230,10 @@ function drawEverything() {
   drawPlayer()
   drawBullet()
 
-  if (!gameStart) displayInstructions()
-  else displayScore() // displays instructions
+  if (!gameStart) displayInstructions() // displays instructions
+  else displayScore() // displays score
 
-  if (score === SCORE_INCREMENT * FLEET_ROWS * FLEET_COLUMNS) displayGameOver()
+  if (score === SCORE_INCREMENT * FLEET_ROWS * FLEET_COLUMNS) displayGameOver() // when score equals # of enemy ships
 }
 
 // Draw Enemy Fleet
@@ -238,8 +255,8 @@ function drawPlayer() {
 
 // Draw Bullet
 function drawBullet() {
-  if (bulletCooldown) {
-    colorRect(bulletX, bulletY, BULLET_WIDTH, BULLET_HEIGHT, 'white')
+  for (let bullet of bullets) {
+    colorRect(bullet[0], bullet[1], BULLET_WIDTH, BULLET_HEIGHT, 'white')
   }
 }
 
@@ -251,13 +268,15 @@ function displayInstructions() {
   canvasContext.fillText(INSTRUCTIONS, canvas.width/2, 500)
 }
 
+// Display Game Over Message
 function displayGameOver() {
-  canvasContext.font = '50px Arial'
+  canvasContext.font = '35px Arial'
   canvasContext.textAlign = "center";
   canvasContext.fillStyle = GAME_OVER_COLOR
   canvasContext.fillText(GAME_OVER, canvas.width/2, canvas.height/2)
 }
 
+// Display Score
 function displayScore() {
   canvasContext.font = '20px Arial'
   canvasContext.textAlign = "center";
