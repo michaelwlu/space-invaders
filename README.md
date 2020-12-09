@@ -1,4 +1,5 @@
-# spaceinvaders
+# space-invaders
+
 Space Invaders with HTML Canvas / JavaScript
 
-https://michaelwlu.github.io/spaceinvaders/
+https://spaceinvaders.michaelwenlu.com
